@@ -60,6 +60,11 @@ yahoo:
     # the players it does not see — so one timeout would otherwise discard the whole run.
     # 0 disables the pause, which is what the tests use.
     page-retry-backoff-ms: ${YAHOO_PAGE_RETRY_BACKOFF_MS:2000}
+  fantasy:
+    # Pause before the one retry of a Fantasy API call whose connection failed before the
+    # request was sent, in milliseconds. Only connect failures are retried; 0 disables the
+    # pause, which is what the tests use.
+    connect-retry-backoff-ms: ${YAHOO_CONNECT_RETRY_BACKOFF_MS:200}
 
 # Player read-model cache: refresh the skaters/goalies tables from Yahoo.
 sync:
