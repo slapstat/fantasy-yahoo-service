@@ -92,6 +92,11 @@ class YahooLeagueServiceTest {
     }
 
     @Test
+    void settings_readsAWeeklyAddLimitSentAsANumber() throws Exception {
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":6")).isEqualTo(6);
+    }
+
+    @Test
     void settings_readsNoWeeklyAddLimitWhenYahooLeavesItOut() throws Exception {
         assertThat(weeklyAddsFrom("")).isNull();
     }

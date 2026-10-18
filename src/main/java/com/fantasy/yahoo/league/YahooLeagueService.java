@@ -374,7 +374,6 @@ public class YahooLeagueService {
         }
     }
 
-    /** A limit Yahoo's form cannot set (blank, not a number, nought or below) reads as none reported. */
     private static Integer positiveIntOrNull(String value) {
         Integer parsed = parseIntOrNull(value);
         return parsed != null && parsed > 0 ? parsed : null;
