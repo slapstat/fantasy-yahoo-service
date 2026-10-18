@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 
 import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
 import java.time.LocalDate;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -325,13 +326,22 @@ public class YahooFantasyClient {
         }
     }
 
+    /**
+     * A connection refused, reset or dropped before the request went out: a fast failure, worth
+     * one more try. A connect that timed out is not one, though the JDK files it under
+     * {@link ConnectException} too: it has already spent the 10 s connect timeout, which is the
+     * BFF's whole budget for the request, so a second wait would only arrive after the caller
+     * has given up.
+     */
     private static boolean isConnectFailure(Throwable e) {
+        boolean connect = false;
         for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConnectException) {
-                return true;
+            if (cause instanceof HttpTimeoutException) {
+                return false;
             }
+            connect |= cause instanceof ConnectException;
         }
-        return false;
+        return connect;
     }
 
     private static String rootCauseType(Throwable e) {

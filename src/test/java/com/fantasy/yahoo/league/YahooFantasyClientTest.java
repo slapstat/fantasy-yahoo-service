@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.net.http.HttpConnectTimeoutException;
 import java.nio.channels.ClosedChannelException;
 import java.time.LocalDate;
 
@@ -224,6 +225,23 @@ class YahooFantasyClientTest {
         assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
                 .isInstanceOf(YahooUpstreamException.class)
                 .hasRootCauseInstanceOf(SocketTimeoutException.class);
+
+        server.verify();
+    }
+
+    @Test
+    void aConnectTimeout_isNotRetried() {
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(request -> {
+                    // As the JDK builds it: the timeout, caused by a ConnectException.
+                    HttpConnectTimeoutException e = new HttpConnectTimeoutException("HTTP connect timed out");
+                    e.initCause(new ConnectException("HTTP connect timed out"));
+                    throw e;
+                });
+
+        assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
+                .isInstanceOf(YahooUpstreamException.class)
+                .hasRootCauseInstanceOf(ConnectException.class);
 
         server.verify();
     }
