@@ -316,8 +316,10 @@ public class YahooFantasyClient {
                 if (attempt >= CONNECT_ATTEMPTS || !isConnectFailure(e)) {
                     throw e;
                 }
-                log.warn("Yahoo Fantasy API call could not connect on attempt {} of {}; retrying",
-                        attempt, CONNECT_ATTEMPTS, e);
+                // Only the failure's type: its message quotes the request URL, and the last
+                // attempt's failure carries the whole trace up to the caller anyway.
+                log.warn("Yahoo Fantasy API call could not connect on attempt {} of {} ({}); retrying",
+                        attempt, CONNECT_ATTEMPTS, rootCauseType(e));
                 backOff();
             }
         }
@@ -330,6 +332,14 @@ public class YahooFantasyClient {
             }
         }
         return false;
+    }
+
+    private static String rootCauseType(Throwable e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getClass().getSimpleName();
     }
 
     private void backOff() {
