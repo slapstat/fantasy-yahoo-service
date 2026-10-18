@@ -30,6 +30,8 @@ yahoo:
     client-secret: test-client-secret
     state-secret: test-state-secret
     token-encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  fantasy:
+    connect-retry-backoff-ms: 0
 
 # The season a sync collects has no default in the app — a run has to know which season it is
 # writing, and guessing would file one season's numbers under another. These test resources

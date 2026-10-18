@@ -5,12 +5,17 @@ import com.fantasy.yahoo.exception.YahooUpstreamException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 
+import java.net.ConnectException;
 import java.time.LocalDate;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -29,11 +34,19 @@ public class YahooFantasyClient {
     /** The positions a league's player collection can be filtered by. */
     public static final String POSITION_PATTERN = "^(C|LW|RW|D|G)$";
 
+    private static final Logger log = LoggerFactory.getLogger(YahooFantasyClient.class);
+
+    private static final int CONNECT_ATTEMPTS = 2;
+
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final long connectRetryBackoffMillis;
 
-    public YahooFantasyClient(RestClient yahooApiRestClient) {
+    public YahooFantasyClient(RestClient yahooApiRestClient,
+                              @Value("${yahoo.fantasy.connect-retry-backoff-ms:200}")
+                              long connectRetryBackoffMillis) {
         this.restClient = yahooApiRestClient;
+        this.connectRetryBackoffMillis = connectRetryBackoffMillis;
     }
 
     private static final String USER_LEAGUES_PATH =
@@ -266,11 +279,7 @@ public class YahooFantasyClient {
     private JsonNode get(String accessToken, String uriTemplate, Object... uriVariables) {
         String body;
         try {
-            body = restClient.get()
-                    .uri(uriTemplate, uriVariables)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .retrieve()
-                    .body(String.class);
+            body = fetchRetryingConnectFailures(accessToken, uriTemplate, uriVariables);
         } catch (HttpClientErrorException.Forbidden e) {
             String description = errorDescription(e.getResponseBodyAsString());
             throw new YahooAccessDeniedException(description != null
@@ -287,6 +296,51 @@ public class YahooFantasyClient {
             return objectMapper.readTree(body);
         } catch (JsonProcessingException e) {
             throw new YahooUpstreamException("Yahoo Fantasy API returned unparseable JSON for " + uriTemplate, e);
+        }
+    }
+
+    /**
+     * A call whose connection failed was never sent, so asking again cannot do anything twice;
+     * that one failure is retried. A read timeout or an error status is not: the request may have
+     * reached Yahoo, and a 403 has to fail at once for the off-season switch.
+     */
+    private String fetchRetryingConnectFailures(String accessToken, String uriTemplate, Object... uriVariables) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return restClient.get()
+                        .uri(uriTemplate, uriVariables)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .retrieve()
+                        .body(String.class);
+            } catch (ResourceAccessException e) {
+                if (attempt >= CONNECT_ATTEMPTS || !isConnectFailure(e)) {
+                    throw e;
+                }
+                log.warn("Yahoo Fantasy API call could not connect on attempt {} of {}; retrying",
+                        attempt, CONNECT_ATTEMPTS, e);
+                backOff();
+            }
+        }
+    }
+
+    private static boolean isConnectFailure(Throwable e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConnectException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void backOff() {
+        if (connectRetryBackoffMillis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(connectRetryBackoffMillis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new YahooUpstreamException("Interrupted while retrying a Yahoo Fantasy API call", e);
         }
     }
 }

@@ -41,7 +41,9 @@
          error/state value. HeadshotSyncService: the failure text of an image fetch, which can
          quote a URL Yahoo gave us. YahooProbeService: the probe path and Yahoo's error body,
          both truncated and stripped of CR/LF by forLog before they reach the log. SyncService:
-         the league key Yahoo hands back, stripped the same way. -->
+         the league key Yahoo hands back, stripped the same way. YahooFantasyClient: a constant
+         message whose only tainted argument is the connect failure itself, whose text quotes the
+         request URL with every caller-supplied value already URL-encoded into it. -->
     <Match>
         <Bug pattern="CRLF_INJECTION_LOGS"/>
         <Or>
@@ -50,6 +52,7 @@
             <Class name="com.fantasy.yahoo.players.HeadshotSyncService"/>
             <Class name="com.fantasy.yahoo.players.YahooProbeService"/>
             <Class name="com.fantasy.yahoo.players.SyncService"/>
+            <Class name="com.fantasy.yahoo.league.YahooFantasyClient"/>
         </Or>
     </Match>
 </FindBugsFilter>

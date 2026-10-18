@@ -9,9 +9,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.nio.channels.ClosedChannelException;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -27,7 +32,7 @@ class YahooFantasyClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://fantasy.test");
         server = MockRestServiceServer.bindTo(builder).build();
-        client = new YahooFantasyClient(builder.build());
+        client = new YahooFantasyClient(builder.build(), 0);
     }
 
     @Test
@@ -168,5 +173,80 @@ class YahooFantasyClientTest {
 
         assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
                 .isInstanceOf(YahooUpstreamException.class);
+    }
+
+    private static ConnectException connectFailure() {
+        ConnectException e = new ConnectException();
+        e.initCause(new ClosedChannelException());
+        return e;
+    }
+
+    @Test
+    void aConnectFailure_isRetriedOnceAndTheSecondAnswerIsReturned() {
+        server.expect(once(), requestTo(containsString("/users;use_login=1/games;game_keys=nhl/leagues")))
+                .andRespond(request -> {
+                    throw connectFailure();
+                });
+        server.expect(once(), requestTo(containsString("/users;use_login=1/games;game_keys=nhl/leagues")))
+                .andExpect(header("Authorization", "Bearer tok"))
+                .andRespond(withSuccess("{\"fantasy_content\":{}}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.getUserNhlLeagues("tok").has("fantasy_content")).isTrue();
+
+        server.verify();
+    }
+
+    @Test
+    void aConnectFailureTwice_isAnUpstreamFailure() {
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(request -> {
+                    throw connectFailure();
+                });
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(request -> {
+                    throw connectFailure();
+                });
+
+        assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
+                .isInstanceOf(YahooUpstreamException.class)
+                .hasRootCauseInstanceOf(ClosedChannelException.class);
+
+        server.verify();
+    }
+
+    @Test
+    void aReadTimeout_isNotRetried() {
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(request -> {
+                    throw new SocketTimeoutException("Read timed out");
+                });
+
+        assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
+                .isInstanceOf(YahooUpstreamException.class)
+                .hasRootCauseInstanceOf(SocketTimeoutException.class);
+
+        server.verify();
+    }
+
+    @Test
+    void aServerError_isNotRetried() {
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
+                .isInstanceOf(YahooUpstreamException.class);
+
+        server.verify();
+    }
+
+    @Test
+    void aForbidden_isNotRetried() {
+        server.expect(once(), requestTo(containsString("/league/453.l.123/settings")))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.getLeagueSettings("tok", "453.l.123"))
+                .isInstanceOf(YahooAccessDeniedException.class);
+
+        server.verify();
     }
 }
