@@ -76,7 +76,8 @@ public class YahooLeagueService {
                 text(meta, "name"),
                 firstNonBlank(text(settings, "scoring_type"), text(meta, "scoring_type")),
                 parseStatCategories(settings),
-                parseRosterPositions(settings));
+                parseRosterPositions(settings),
+                positiveIntOrNull(text(settings, "max_weekly_adds")));
     }
 
     public LeagueDraftResponse draft(String appUserId, String leagueKey) {
@@ -371,6 +372,12 @@ public class YahooLeagueService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** A limit Yahoo's form cannot set (blank, not a number, nought or below) reads as none reported. */
+    private static Integer positiveIntOrNull(String value) {
+        Integer parsed = parseIntOrNull(value);
+        return parsed != null && parsed > 0 ? parsed : null;
     }
 
     private static Integer intOrNull(JsonNode node, String field) {
