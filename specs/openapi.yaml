@@ -943,6 +943,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RosterSlot"
+        maxWeeklyAdds:
+          type: integer
+          format: int32
+          description: "How many players a team may add in one fantasy week (Yahoo's\
+            \ max_weekly_adds, \"Max Acquisitions per Week\"). Null when the league\
+            \ sets no maximum: Yahoo then leaves the field out."
+          minimum: 1
       required:
       - leagueKey
       - name

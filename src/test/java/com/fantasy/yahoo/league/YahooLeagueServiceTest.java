@@ -69,7 +69,8 @@ class YahooLeagueServiceTest {
                 + "{\"stat\":{\"stat_id\":1,\"value\":\"3\"}},{\"stat\":{\"stat_id\":2,\"value\":\"2\"}}]},"
                 + "\"roster_positions\":["
                 + "{\"roster_position\":{\"position\":\"C\",\"position_type\":\"P\",\"count\":2}},"
-                + "{\"roster_position\":{\"position\":\"BN\",\"count\":4}}]}]}]}}"));
+                + "{\"roster_position\":{\"position\":\"BN\",\"count\":4}}],"
+                + "\"max_weekly_adds\":\"4\"}]}]}}"));
 
         LeagueSettingsResponse settings = service().settings(USER, "453.l.123");
 
@@ -87,6 +88,34 @@ class YahooLeagueServiceTest {
         assertThat(settings.rosterPositions().getFirst().count()).isEqualTo(2);
         assertThat(settings.rosterPositions().get(1).position()).isEqualTo("BN");
         assertThat(settings.rosterPositions().get(1).count()).isEqualTo(4);
+        assertThat(settings.maxWeeklyAdds()).isEqualTo(4);
+    }
+
+    @Test
+    void settings_readsAWeeklyAddLimitSentAsANumber() throws Exception {
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":6")).isEqualTo(6);
+    }
+
+    @Test
+    void settings_readsNoWeeklyAddLimitWhenYahooLeavesItOut() throws Exception {
+        assertThat(weeklyAddsFrom("")).isNull();
+    }
+
+    @Test
+    void settings_readsNoWeeklyAddLimitFromAValueYahooCannotSet() throws Exception {
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":\"0\"")).isNull();
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":\"-1\"")).isNull();
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":\"\"")).isNull();
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":\"four\"")).isNull();
+        assertThat(weeklyAddsFrom(",\"max_weekly_adds\":null")).isNull();
+    }
+
+    private Integer weeklyAddsFrom(String field) throws Exception {
+        when(oauthService.validAccessToken(USER)).thenReturn("token");
+        when(client.getLeagueSettings("token", "453.l.123")).thenReturn(json(
+                "{\"fantasy_content\":{\"league\":[{\"league_key\":\"453.l.123\",\"name\":\"My League\"},"
+                + "{\"settings\":[{\"scoring_type\":\"head\"" + field + "}]}]}}"));
+        return service().settings(USER, "453.l.123").maxWeeklyAdds();
     }
 
     @Test
