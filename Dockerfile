@@ -41,4 +41,11 @@ COPY --from=build /app/extracted/ ./
 
 EXPOSE 8088
 USER 10001:10001
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Eight virtual-thread carriers, not one per core. A carrier is never taken back from a virtual
+# thread that is computing rather than blocking, so on staging's two cores two CPU-heavy requests
+# can hold both carriers while a third, whose Yahoo or Postgres answer has already arrived, cannot be
+# scheduled to read it before its deadline cancels it. That happened in fantasy-bff
+# (JAVA-SPRING-BOOT-3N, fixed there by bff#402); this service had no alert of its own yet. Carriers
+# beyond the core count are platform threads the OS time-slices, so a waiting request gets back on
+# within a scheduler tick instead of waiting for a computation to finish.
+ENTRYPOINT ["java", "-Djdk.virtualThreadScheduler.parallelism=8", "-jar", "app.jar"]
