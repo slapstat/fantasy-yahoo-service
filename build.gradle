@@ -3,7 +3,7 @@ plugins {
 	id 'org.springframework.boot' version '4.1.1'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'jacoco'
-	id 'com.github.spotbugs' version '6.5.12'
+	id 'com.github.spotbugs' version '6.5.13'
 }
 
 group = 'com.fantasy'
@@ -28,7 +28,7 @@ dependencies {
 
 	// Error tracking: ERROR-level logs are forwarded to Sentry (see logback-spring.xml).
 	// Active only when SENTRY_DSN is set (prod/staging); inert locally and in CI/tests.
-	implementation 'io.sentry:sentry-logback:8.59.0'
+	implementation 'io.sentry:sentry-logback:8.61.0'
 
 	// Database migrations
 	// Spring Boot 4 split autoconfiguration into per-technology modules; the
